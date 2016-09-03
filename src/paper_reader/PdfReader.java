@@ -1,11 +1,13 @@
 package paper_reader;
 
+import java.awt.print.Book;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 
-import org.apache.pdfbox.io.RandomAccessFile;
 import org.apache.pdfbox.io.RandomAccessRead;
+import org.apache.pdfbox.io.RandomAccessFile;
 import org.apache.pdfbox.pdfparser.PDFParser;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.interactive.documentnavigation.destination.PDDestination;
@@ -15,15 +17,8 @@ import org.apache.pdfbox.pdmodel.interactive.documentnavigation.outline.PDOutlin
 import org.apache.pdfbox.text.PDFTextStripper;
 
 public class PdfReader {
-	public static void main(String[] args) throws IOException {
-		String filename = "data/SIGMOD2015.pdf";
-		PDDocument document = PDDocument.load(new File(filename));
-		// // Uncomment to print the bookmarks in the doc
-		PDDocumentOutline root = document.getDocumentCatalog().getDocumentOutline();
-		System.out.println(document.getNumberOfPages());
-		System.out.println(document.getDocumentCatalog());
-		System.out.println(root);
-		printBookmark(root, "  ");
+	public static void main(String[] args) {
+		String filename = "data/small.pdf";
 
 	}
 
@@ -32,13 +27,11 @@ public class PdfReader {
 		while (current != null) {
 			System.out.println(indentation + current.getTitle());
 			PDDestination destination = current.getDestination();
-			// if (destination != null)
-			// System.out.println("+ " + destination);
-			
-			// uncomment to do a recursive print
-			// printBookmark(current, indentation + "    ");
+			System.out.println("+ " + destination);
+			printBookmark(current, indentation + "    ");
 			current = current.getNextSibling();
 		}
+
 	}
 
 	public static String readWholePDF(String filename) {
