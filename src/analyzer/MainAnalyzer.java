@@ -29,50 +29,47 @@ public class MainAnalyzer {
 	public static final String[] STOP_WORDS = { "great", "numerous", "several", "year", "just", "good", "property",
 			"variety", "large", "student", "opportunity", "e .g", "%", "important", "other", "same", "thin" };
 
-	public static final String[] STOP_WORDSx = { "entire", "results", "various", "extensions", "input", "main", "many",
-			"number", "different", "way", "available", "large", "certain", "basic", "possible", "entire", "results",
-			"appropriate", "controlled", "actual", "extensions", "excellent", "pure", "relevant" };
+	public static final int C_VALUE_THRESHOLD = 0;
 
-	public static final int C_VALUE_THRESHOLD = 5;
-
-	public static final int FREQ_THRESHOLD = 5;
+	public static final int FREQ_THRESHOLD = 3;
 
 	public static final SimpleDateFormat sdf = new SimpleDateFormat("HH:mm");
 
 	public static void main(String[] args) throws IOException {
-		// extracting  paper texts from pdf of proceedings
-//		String pdfText = extractText("data/SIGMOD2015.pdf");
-//		String pdfText = extractText("data/small.pdf");
-//		System.out.println(pdfText);
-		
+		// extracting paper texts from pdf of proceedings
+		// String pdfText = extractText("data/SIGMOD2015.pdf");
+		// String pdfText = extractText("data/small.pdf");
+		// System.out.println(pdfText);
+
 		// writing paper text to .txt file
-//		try (FileWriter fw = new FileWriter("data/sigmod.txt")) {
-//			fw.write(pdfText);
-//		}
-		
-		// reading papers from the txt file 
+		// try (FileWriter fw = new FileWriter("data/sigmod.txt")) {
+		// fw.write(pdfText);
+		// }
+
+		// reading papers from the txt file
 		byte[] data;
 		File file = new File("data/sigmod.txt");
-		try (FileInputStream fis = new FileInputStream(file)){
+		try (FileInputStream fis = new FileInputStream(file)) {
 			data = new byte[(int) file.length()];
 			fis.read(data);
 		}
 		String pdfText = new String(data, "UTF-8");
-		
+
 		// cleanup string
-		pdfText = pdfText.replace("-", "");
-		
+		pdfText = pdfText.replaceAll("-\\r?\\n", "").replaceAll(
+				"Permission to make(?s:.)+?15.00", "");
+	
+
 		// extracting abstracts of papers
-		Pattern pattern = Pattern.compile("ABSTRACT[\\n\\r]((?s:.)+?)[\\n\\r]1\\.");
+		Pattern pattern = Pattern.compile("ABSTRACT\\r?\\n((?s:.)+?)\\r?\\n(1\\.|Categories and Subject Descriptors)+?");
 		Matcher matcher = pattern.matcher(pdfText);
 		ArrayList<String> abstracts = new ArrayList<String>();
-		while(matcher.find()) {
-			abstracts.add(matcher.group(1));
+		while (matcher.find()) {
+			abstracts.add(matcher.group(1) + "\n");
 		}
 		System.out.println(abstracts.size());
 		System.out.println(abstracts);
-		
-		
+
 		List<Phrase> phraseList = getPhraseFrequency(abstracts.toArray(new String[0]));
 		removeStopWords(phraseList);
 		List<Phrase> phrases = computeCvalue(phraseList);
@@ -94,7 +91,7 @@ public class MainAnalyzer {
 			bw.write(phrase.text + "& " + phrase.cValue + "\\\\ \\hline \n");
 		}
 		System.out.println(topPhrases);
-		bw.close(); 
+		bw.close();
 	}
 
 	public static String extractText(String filename) throws IOException {
@@ -115,11 +112,11 @@ public class MainAnalyzer {
 		String[] tags = flattenArray(tagList);
 		String[] tokens = flattenArray(tokenList);
 		System.out.println("    tag token size: " + tags.length + " " + tokens.length);
-//		BufferedWriter bw = new BufferedWriter(new FileWriter("data/out.txt"));
-//		for (int i = 0; i < tags.length; i++) {
-//			bw.write(tags[i] + " " + tokens[i] + "\n");
-//		}
-//		bw.close();
+		BufferedWriter bw = new BufferedWriter(new FileWriter("data/tagged.txt"));
+		for (int i = 0; i < tags.length; i++) {
+			bw.write(tags[i] + " " + tokens[i] + "\n");
+		}
+		bw.close();
 		System.out.println("  building tags " + sdf.format(new Date()));
 		HashMap<Integer, Integer> tagTokenMap = new HashMap<Integer, Integer>();
 		StringBuilder tagBuilder = new StringBuilder();
@@ -128,8 +125,6 @@ public class MainAnalyzer {
 		int tokenStartPos = 0;
 		for (int i = 0; i < tags.length; i++) {
 			tagTokenMap.put(tagStartPos, tokenStartPos);
-			// System.out.println(tagStartPos + " " + tokenStartPos);
-			// System.out.println(tags.get(0)[i] + " " + tokens.get(0)[i]);
 			tagBuilder.append(tags[i]);
 			tagBuilder.append(" ");
 			tokenBuilder.append(tokens[i]);
@@ -141,19 +136,17 @@ public class MainAnalyzer {
 		String tagString = tagBuilder.toString();
 		String tokenString = tokenBuilder.toString();
 		System.out.println("  regex " + sdf.format(new Date()));
-		Pattern pattern = Pattern.compile("((NN )|(JJ ))+(NN|NNS) ");
+		Pattern pattern = Pattern.compile(
+				"((NN)|(NNS)|(JJ)|(VBG))+ (NN|NNS) (IN ((NN)|(NNS)|(JJ)|(VBG))+ (NN|NNS) )*");
 		Matcher matcher = pattern.matcher(tagString);
 		HashMap<String, Integer> pattern2count = new HashMap<String, Integer>();
 		// Iterate through all matched substrings and print their positions.
 		// Keep in mind that character indices start with 0.
 		// System.out.println(" substring [start_position, end_position]");
 		while (matcher.find()) {
-			matcher.group();
 			int tokenStart = tagTokenMap.get(matcher.start());
 			int tokenEnd = tagTokenMap.get(matcher.end());
 			String substring = tokenString.substring(tokenStart, tokenEnd);
-			// System.out.println(substring + "\t[" + matcher.start() + " , " +
-			// matcher.end() + "]" );
 			if (pattern2count.containsKey(substring)) {
 				pattern2count.put(substring, pattern2count.get(substring) + 1);
 			} else {
@@ -166,21 +159,6 @@ public class MainAnalyzer {
 			if (pattern2count.get(key) > FREQ_THRESHOLD)
 				phraseList.add(new Phrase(key, pattern2count.get(key)));
 		}
-		// System.out.println("\nFrequencies of substrings.");
-		// System.out.println(pattern2count);
-
-		// sort them in descending order
-		// List<ComparableObj<String, Integer>> rank = new
-		// ArrayList<ComparableObj<String, Integer>>();
-		// for (Map.Entry<String, Integer> entry : pattern2count.entrySet()) {
-		// rank.add(new ComparableObj<String, Integer>(entry.getKey(), entry
-		// .getValue()));
-		// }
-
-		// Collections.sort(rank);
-		// System.out.println();
-		// System.out.println("Rank substrings in descending order.");
-		// System.out.println(rank);
 		return phraseList;
 	}
 
@@ -223,9 +201,6 @@ public class MainAnalyzer {
 		});
 		for (int i = phraseList.size() - 1; i >= 0; i--) {
 			Phrase phrase = phraseList.get(i);
-			// System.out.println(phrase.text);
-			// System.out.println(phrase.text.split(" ").length + " "
-			// + phrase.freq);
 			if (phrase.tValue == 0) {
 				phrase.cValue = (Math.log(phrase.text.split(" ").length) / Math.log(2)) * phrase.freq;
 			} else {
@@ -235,16 +210,11 @@ public class MainAnalyzer {
 			for (int j = 0; j < i; j++) {
 				Phrase subPhrase = phraseList.get(j);
 				if (phrase.text.contains(subPhrase.text)) {
-					// System.out.println(" " + subPhrase.text);
 					subPhrase.tValue += phrase.freq - phrase.tValue;
 					subPhrase.ctValue++;
 				}
 			}
 		}
-		// for (Phrase ph : phraseList) {
-		// System.out.println(ph.text + " " + ph.ctValue + " " + ph.tValue
-		// + " " + ph.cValue);
-		// }
 		return phraseList;
 	}
 
