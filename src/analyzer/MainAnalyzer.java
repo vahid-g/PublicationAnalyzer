@@ -83,7 +83,7 @@ public class MainAnalyzer {
 			}
 		});
 		Set<Phrase> topPhrases = new HashSet<Phrase>();
-		BufferedWriter bw = new BufferedWriter(new FileWriter("output.txt"));
+		BufferedWriter bw = new BufferedWriter(new FileWriter("data/output.txt"));
 		System.out.println("phraseList size: " + phraseList.size());
 		for (int i = phraseList.size() - 1; i >= phraseList.size() - 20; i--) {
 			if (i < 0)
@@ -115,7 +115,7 @@ public class MainAnalyzer {
 		String[] tags = flattenArray(tagList);
 		String[] tokens = flattenArray(tokenList);
 		System.out.println("    tag token size: " + tags.length + " " + tokens.length);
-//		BufferedWriter bw = new BufferedWriter(new FileWriter("out.txt"));
+//		BufferedWriter bw = new BufferedWriter(new FileWriter("data/out.txt"));
 //		for (int i = 0; i < tags.length; i++) {
 //			bw.write(tags[i] + " " + tokens[i] + "\n");
 //		}
