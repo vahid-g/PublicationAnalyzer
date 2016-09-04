@@ -24,8 +24,6 @@ import org.apache.commons.lang3.ArrayUtils;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 
-import file.reader;
-
 public class MainAnalyzer {
 
 	public static final String[] STOP_WORDS = { "great", "numerous", "several", "year", "just", "good", "property",
@@ -60,6 +58,9 @@ public class MainAnalyzer {
 			fis.read(data);
 		}
 		String pdfText = new String(data, "UTF-8");
+		
+		// cleanup string
+		pdfText = pdfText.replace("-", "");
 		
 		// extracting abstracts of papers
 		Pattern pattern = Pattern.compile("ABSTRACT[\\n\\r]((?s:.)+?)[\\n\\r]1\\.");
@@ -96,7 +97,6 @@ public class MainAnalyzer {
 		bw.close(); 
 	}
 
-	
 	public static String extractText(String filename) throws IOException {
 		PDFTextStripper reader = new PDFTextStripper();
 		PDDocument document = PDDocument.load(new File(filename));
