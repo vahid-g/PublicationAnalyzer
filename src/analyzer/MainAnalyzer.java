@@ -19,6 +19,7 @@ import java.util.regex.Pattern;
 
 import nlp.POStagger;
 import nlp.Tokenizer;
+import parser.PdfParser;
 
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -26,53 +27,25 @@ import org.apache.pdfbox.text.PDFTextStripper;
 
 public class MainAnalyzer {
 
-	public static final String[] STOP_WORDS = { "great", "numerous", "several", "year", "just", "good", "property",
-			"variety", "large", "student", "opportunity", "e .g", "%", "important", "other", "same", "thin" };
+	public static final String[] STOP_WORDS = { "i .e", "e .g.", "same", "other"};
 
 	public static final int C_VALUE_THRESHOLD = 0;
 
-	public static final int FREQ_THRESHOLD = 3;
+	public static final int FREQ_THRESHOLD = 0;
 
 	public static final SimpleDateFormat sdf = new SimpleDateFormat("HH:mm");
 
 	public static void main(String[] args) throws IOException {
-		// extracting paper texts from pdf of proceedings
-		// String pdfText = extractText("data/SIGMOD2015.pdf");
-		// String pdfText = extractText("data/small.pdf");
-		// System.out.println(pdfText);
-
-		// writing paper text to .txt file
-		// try (FileWriter fw = new FileWriter("data/sigmod.txt")) {
-		// fw.write(pdfText);
-		// }
-
-		// reading papers from the txt file
-		byte[] data;
-		File file = new File("data/sigmod.txt");
-		try (FileInputStream fis = new FileInputStream(file)) {
-			data = new byte[(int) file.length()];
-			fis.read(data);
-		}
-		String pdfText = new String(data, "UTF-8");
-
-		// cleanup string
-		pdfText = pdfText.replaceAll("-\\r?\\n", "").replaceAll(
-				"Permission to make(?s:.)+?15.00", "");
-	
-
-		// extracting abstracts of papers
-		Pattern pattern = Pattern.compile("ABSTRACT\\r?\\n((?s:.)+?)\\r?\\n(1\\.|Categories and Subject Descriptors)+?");
-		Matcher matcher = pattern.matcher(pdfText);
-		ArrayList<String> abstracts = new ArrayList<String>();
-		while (matcher.find()) {
-			abstracts.add(matcher.group(1) + "\n");
-		}
-		System.out.println(abstracts.size());
-		System.out.println(abstracts);
-
-		List<Phrase> phraseList = getPhraseFrequency(abstracts.toArray(new String[0]));
+		System.out.println(sdf.format(new Date()) + "loading data..");
+		String[] docs = PdfParser.extractPapersFromStructuredProceedings(new File("data/sigmod_struct.txt"));
+		
+		System.out.println(sdf.format(new Date()) + "computing phrase frequences..");
+		List<Phrase> phraseList = getPhraseFrequency(docs);
 		removeStopWords(phraseList);
+		
+		System.out.println(sdf.format(new Date()) + "computing cvalues..");
 		List<Phrase> phrases = computeCvalue(phraseList);
+		
 		System.out.println(sdf.format(new Date()) + " - Printing Results..");
 		Collections.sort(phrases, new Comparator<Phrase>() {
 			@Override
@@ -83,23 +56,16 @@ public class MainAnalyzer {
 		Set<Phrase> topPhrases = new HashSet<Phrase>();
 		BufferedWriter bw = new BufferedWriter(new FileWriter("data/output.txt"));
 		System.out.println("phraseList size: " + phraseList.size());
-		for (int i = phraseList.size() - 1; i >= phraseList.size() - 20; i--) {
+		for (int i = phraseList.size() - 1; i >= phraseList.size() - 50; i--) {
 			if (i < 0)
 				break;
 			topPhrases.add(phraseList.get(i));
 			Phrase phrase = phraseList.get(i);
-			bw.write(phrase.text + "& " + phrase.cValue + "\\\\ \\hline \n");
+			bw.write(phrase.text + ", " + phrase.cValue + ", " + phrase.freq + ", " + phrase.superFreq + ", "
+					+ phrase.superCount + " \n");
 		}
 		System.out.println(topPhrases);
 		bw.close();
-	}
-
-	public static String extractText(String filename) throws IOException {
-		PDFTextStripper reader = new PDFTextStripper();
-		PDDocument document = PDDocument.load(new File(filename));
-		String pageText = reader.getText(document);
-		document.close();
-		return pageText;
 	}
 
 	public static List<Phrase> getPhraseFrequency(String[] abstractArray) throws IOException {
@@ -125,34 +91,21 @@ public class MainAnalyzer {
 		int tokenStartPos = 0;
 		for (int i = 0; i < tags.length; i++) {
 			tagTokenMap.put(tagStartPos, tokenStartPos);
-			tagBuilder.append(tags[i]);
-			tagBuilder.append(" ");
-			tokenBuilder.append(tokens[i]);
-			tokenBuilder.append(" ");
+			tagBuilder.append(tags[i] + " ");
+			tokenBuilder.append(tokens[i] + " ");
 			tagStartPos = tagBuilder.length();
 			tokenStartPos = tokenBuilder.length();
+			tagTokenMap.put(tagStartPos - 1, tokenStartPos - 1);
 		}
 		tagTokenMap.put(tagStartPos, tokenStartPos);
+
 		String tagString = tagBuilder.toString();
 		String tokenString = tokenBuilder.toString();
-		System.out.println("  regex " + sdf.format(new Date()));
-		Pattern pattern = Pattern.compile(
-				"((NN)|(NNS)|(JJ)|(VBG))+ (NN|NNS) (IN ((NN)|(NNS)|(JJ)|(VBG))+ (NN|NNS) )*");
-		Matcher matcher = pattern.matcher(tagString);
-		HashMap<String, Integer> pattern2count = new HashMap<String, Integer>();
-		// Iterate through all matched substrings and print their positions.
-		// Keep in mind that character indices start with 0.
-		// System.out.println(" substring [start_position, end_position]");
-		while (matcher.find()) {
-			int tokenStart = tagTokenMap.get(matcher.start());
-			int tokenEnd = tagTokenMap.get(matcher.end());
-			String substring = tokenString.substring(tokenStart, tokenEnd);
-			if (pattern2count.containsKey(substring)) {
-				pattern2count.put(substring, pattern2count.get(substring) + 1);
-			} else {
-				pattern2count.put(substring, 1);
-			}
-		}
+		String basicBlock = " ((DT )?((NNS)|(NN)|(JJ)|(VBG)) )+(NNS |NN )";
+		HashMap<String, Integer> pattern2count = extractPatternsWithFrequency(tagTokenMap, tagString, tokenString,
+				Pattern.compile(basicBlock));
+		pattern2count.putAll(extractPatternsWithFrequency(tagTokenMap, tagString, tokenString,
+				Pattern.compile(basicBlock + "(IN " + basicBlock + ")+")));
 		System.out.println("  making list " + sdf.format(new Date()));
 		List<Phrase> phraseList = new ArrayList<Phrase>();
 		for (String key : pattern2count.keySet()) {
@@ -160,6 +113,28 @@ public class MainAnalyzer {
 				phraseList.add(new Phrase(key, pattern2count.get(key)));
 		}
 		return phraseList;
+	}
+
+	private static HashMap<String, Integer> extractPatternsWithFrequency(HashMap<Integer, Integer> tagTokenMap,
+			String tagString, String tokenString, Pattern pattern) {
+		System.out.println("  regex " + sdf.format(new Date()));
+		Matcher matcher = pattern.matcher(tagString);
+		HashMap<String, Integer> pattern2count = new HashMap<String, Integer>();
+		// Iterate through all matched substrings and print their positions.
+		// Keep in mind that character indices start with 0.
+		while (matcher.find()) {
+			// System.out.println(matcher.start());
+			int tokenStart = tagTokenMap.get(matcher.start());
+			int tokenEnd = tagTokenMap.get(matcher.end());
+			String substring = tokenString.substring(tokenStart, tokenEnd);
+			// System.out.println(substring);
+			if (pattern2count.containsKey(substring)) {
+				pattern2count.put(substring, pattern2count.get(substring) + 1);
+			} else {
+				pattern2count.put(substring, 1);
+			}
+		}
+		return pattern2count;
 	}
 
 	private static String[] flattenArray(ArrayList<String[]> list) {
@@ -201,17 +176,17 @@ public class MainAnalyzer {
 		});
 		for (int i = phraseList.size() - 1; i >= 0; i--) {
 			Phrase phrase = phraseList.get(i);
-			if (phrase.tValue == 0) {
+			if (phrase.superFreq == 0) {
 				phrase.cValue = (Math.log(phrase.text.split(" ").length) / Math.log(2)) * phrase.freq;
 			} else {
 				phrase.cValue = (Math.log(phrase.text.split(" ").length) / Math.log(2))
-						* (phrase.freq - (1.0 / phrase.ctValue) * phrase.tValue);
+						* (phrase.freq - (1.0 / phrase.superCount) * phrase.superFreq);
 			}
 			for (int j = 0; j < i; j++) {
 				Phrase subPhrase = phraseList.get(j);
 				if (phrase.text.contains(subPhrase.text)) {
-					subPhrase.tValue += phrase.freq - phrase.tValue;
-					subPhrase.ctValue++;
+					subPhrase.superFreq += phrase.freq - phrase.superFreq;
+					subPhrase.superCount++;
 				}
 			}
 		}
@@ -221,8 +196,8 @@ public class MainAnalyzer {
 	public static class Phrase {
 		String text;
 		Integer freq;
-		int tValue = 0;
-		int ctValue = 0;
+		int superFreq = 0;
+		int superCount = 0;
 		Double cValue;
 
 		public Phrase(String text, int freq) {
